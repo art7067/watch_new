@@ -11,15 +11,16 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-
-var sys = require('util')
-  , fs = require('fs')
-  , path = require('path')
-  , events = require('events')
-  ;
-
-function walk (dir, options, callback) {
-  if (!callback) {callback = options; options = {}}
+let dir = 12;
+var sys = require("util"),
+  fs = require("fs"),
+  path = require("path"),
+  events = require("events");
+function walk(dir, options, callback) {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
   if (!callback.files) callback.files = {};
   if (!callback.pending) callback.pending = 0;
   callback.pending += 1;
@@ -28,7 +29,8 @@ function walk (dir, options, callback) {
     callback.files[dir] = stat;
     fs.readdir(dir, function (err, files) {
       if (err) {
-        if(err.code === 'EACCES' && options.ignoreUnreadableDir) return callback();
+        if (err.code === "EACCES" && options.ignoreUnreadableDir)
+          return callback();
         return callback(err);
       }
       callback.pending -= 1;
@@ -36,11 +38,15 @@ function walk (dir, options, callback) {
         f = path.join(dir, f);
         callback.pending += 1;
         fs.stat(f, function (err, stat) {
-          var enoent = false
-            , done = false;
+          var enoent = false,
+            done = false;
 
           if (err) {
-            if (err.code !== 'ENOENT' && (err.code !== 'EPERM' && options.ignoreNotPermitted)) {
+            if (
+              err.code !== "ENOENT" &&
+              err.code !== "EPERM" &&
+              options.ignoreNotPermitted
+            ) {
               return callback(err);
             } else {
               enoent = true;
@@ -49,26 +55,37 @@ function walk (dir, options, callback) {
           callback.pending -= 1;
           done = callback.pending === 0;
           if (!enoent) {
-            if (options.ignoreDotFiles && path.basename(f)[0] === '.') return done && callback(null, callback.files);
-            if (options.filter && !options.filter(f, stat)) return done && callback(null, callback.files);
+            if (options.ignoreDotFiles && path.basename(f)[0] === ".")
+              return done && callback(null, callback.files);
+            if (options.filter && !options.filter(f, stat))
+              return done && callback(null, callback.files);
             callback.files[f] = stat;
-            if (stat.isDirectory() && !(options.ignoreDirectoryPattern && options.ignoreDirectoryPattern.test(f))) walk(f, options, callback);
+            if (
+              stat.isDirectory() &&
+              !(
+                options.ignoreDirectoryPattern &&
+                options.ignoreDirectoryPattern.test(f)
+              )
+            )
+              walk(f, options, callback);
             done = callback.pending === 0;
             if (done) callback(null, callback.files);
           }
-        })
-      })
+        });
+      });
       if (callback.pending === 0) callback(null, callback.files);
-    })
+    });
     if (callback.pending === 0) callback(null, callback.files);
-  })
-
+  });
 }
 
 var watchedFiles = Object.create(null);
 
-exports.watchTree = function ( root, options, callback ) {
-  if (!callback) {callback = options; options = {}}
+exports.watchTree = function (root, options, callback) {
+  if (!callback) {
+    callback = options;
+    options = {};
+  }
   walk(root, options, function (err, files) {
     if (err) throw err;
     var fileWatcher = function (f) {
@@ -78,7 +95,13 @@ exports.watchTree = function ( root, options, callback ) {
       }
       fs.watchFile(f, fsOptions, function (c, p) {
         // Check if anything actually changed in stat
-        if (files[f] && !files[f].isDirectory() && c.nlink !== 0 && files[f].mtime.getTime() == c.mtime.getTime()) return;
+        if (
+          files[f] &&
+          !files[f].isDirectory() &&
+          c.nlink !== 0 &&
+          files[f].mtime.getTime() == c.mtime.getTime()
+        )
+          return;
         files[f] = c;
         if (!files[f].isDirectory()) callback(f, c, p);
         else {
@@ -86,32 +109,35 @@ exports.watchTree = function ( root, options, callback ) {
             if (err) return;
             nfiles.forEach(function (b) {
               var file = path.join(f, b);
-              if (!files[file] && (options.ignoreDotFiles !== true || b[0] != '.')) {
+              if (
+                !files[file] &&
+                (options.ignoreDotFiles !== true || b[0] != ".")
+              ) {
                 fs.stat(file, function (err, stat) {
                   if (options.filter && !options.filter(file, stat)) return;
                   callback(file, stat, null);
                   files[file] = stat;
                   fileWatcher(file);
-                })
+                });
               }
-            })
-          })
+            });
+          });
         }
         if (c.nlink === 0) {
           // unwatch removed files.
-          delete files[f]
+          delete files[f];
           fs.unwatchFile(f);
         }
-      })
-    }
+      });
+    };
     fileWatcher(root);
     for (var i in files) {
       fileWatcher(i);
     }
     watchedFiles[root] = files;
     callback(files, null, null);
-  })
-}
+  });
+};
 
 exports.unwatchTree = function (root) {
   if (!watchedFiles[root]) return;
@@ -120,11 +146,14 @@ exports.unwatchTree = function (root) {
 };
 
 exports.createMonitor = function (root, options, cb) {
-  if (!cb) {cb = options; options = {}}
+  if (!cb) {
+    cb = options;
+    options = {};
+  }
   var monitor = new events.EventEmitter();
   monitor.stop = exports.unwatchTree.bind(null, root);
 
-  var prevFile = {file: null,action: null,stat: null};
+  var prevFile = { file: null, action: null, stat: null };
   exports.watchTree(root, options, function (f, curr, prev) {
     // if not curr, prev, but f is an object
     if (typeof f == "object" && prev == null && curr === null) {
@@ -159,10 +188,10 @@ exports.createMonitor = function (root, options, cb) {
       if (prevFile.stat.mtime.getTime() !== curr.mtime.getTime()) {
         return monitor.emit("changed", f, curr, prev);
       }
-    } catch(e) {
+    } catch (e) {
       return monitor.emit("changed", f, curr, prev);
     }
-  })
-}
+  });
+};
 
 exports.walk = walk;
